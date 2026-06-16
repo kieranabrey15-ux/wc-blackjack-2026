@@ -59,7 +59,26 @@ export default async (req) => {
     return new Response("Missing API_FOOTBALL_KEY", { status: 500 });
   }
   const store = getStore("wc-blackjack");
-  const backfill = new URL(req.url).searchParams.get("backfill") === "1";
+  const url = new URL(req.url);
+  const backfill = url.searchParams.get("backfill") === "1";
+  const debug = url.searchParams.get("debug") === "1";
+
+  // --- diagnostic: find the right World Cup id/season and confirm coverage ---
+  if (debug) {
+    const raw = async (p) => { const r = await fetch(`${API}${p}`, { headers }); return r.json(); };
+    const lg = await raw(`/leagues?search=world cup`);
+    const fx = await raw(`/fixtures?league=${LEAGUE}&season=${SEASON}`);
+    const worldCupLeagues = (lg.response || []).map(x => ({
+      id: x.league?.id, name: x.league?.name, type: x.league?.type,
+      country: x.country?.name, seasons: (x.seasons || []).map(s => s.year),
+    }));
+    return new Response(JSON.stringify({
+      configured: { LEAGUE, SEASON },
+      fixturesForConfigured: (fx.response || []).length,
+      apiErrors: { leagues: lg.errors, fixtures: fx.errors },
+      worldCupLeagues,
+    }, null, 2), { headers: { "content-type": "application/json" } });
+  }
 
   // --- daily budget guard ---
   const today = new Date().toISOString().slice(0, 10);
