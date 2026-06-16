@@ -1,167 +1,140 @@
 // netlify/functions/poll-stats.mjs
-// Scheduled poller. Reads live + recently-finished World Cup fixtures, pulls their events,
+// Poller for football-data.org (free tier covers the current World Cup).
+// Reads WC matches, pulls each finished/live match's goal detail (scorer + assist),
 // and accumulates goals/assists per picked player into Netlify Blobs.
 //
-// Design notes (built around the free-tier 100 req/day limit and the 10s function timeout):
-//   * Per-fixture caching: each fixture's contribution is stored separately, so a LIVE match
-//     is simply recomputed and overwritten each run — no double counting.
-//   * Finished fixtures are marked final and never fetched again (the big request saving).
-//   * Early exit: if nothing is live and nothing newly finished, the run costs 1 request.
-//   * Daily budget guard: hard stop before the free tier is exhausted.
+// Token: set env var FOOTBALL_DATA_TOKEN (or reuse API_FOOTBALL_KEY) to your football-data.org token.
+// Modes (URL params):
+//   ?debug=1     -> show competition coverage + a sample finished match's goals (verify assists exist)
+//   ?backfill=1  -> catch up all finished matches so far (resumable; run again until "complete")
+//   (no param)   -> normal incremental: live + newly finished
 //
-// Env var required:  API_FOOTBALL_KEY   (from dashboard.api-football.com)
-// Adjust LEAGUE/SEASON if the World Cup id differs in your plan (guide says league=1, season=2026).
+// Free-tier limit is 10 requests/minute, so each run makes at most ~9 calls (1 list + 8 details).
+// For a big backfill, run ?backfill=1 a few times, ~1 minute apart.
 
 import { getStore } from "@netlify/blobs";
 import { matchPlayer } from "../lib/players.mjs";
 
-const API = "https://v3.football.api-sports.io";
-const LEAGUE = 1;
-const SEASON = 2026;
-const MAX_DAILY_REQUESTS = 90;        // stay under the free 100/day
-const MAX_EVENT_FETCHES_PER_RUN = 8;  // protect the 10s timeout
-const BACKFILL_FETCHES_PER_RUN = 20;  // bigger one-time catch-up batch (still timeout-safe)
+const API = "https://api.football-data.org/v4";
+const COMPETITION = "WC";                 // FIFA World Cup
+const DETAILS_PER_RUN = 8;                // 1 list + 8 details = 9 calls, under 10/min
 
-const LIVE = new Set(["1H", "HT", "2H", "ET", "BT", "P", "LIVE"]);
-const DONE = new Set(["FT", "AET", "PEN"]);
+const TOKEN = process.env.FOOTBALL_DATA_TOKEN || process.env.API_FOOTBALL_KEY;
+const headers = { "X-Auth-Token": TOKEN || "" };
 
-const headers = { "x-apisports-key": process.env.API_FOOTBALL_KEY };
+const LIVE = new Set(["IN_PLAY", "PAUSED"]);
+const DONE = new Set(["FINISHED", "AWARDED"]);
 
 async function api(path) {
   const res = await fetch(`${API}${path}`, { headers });
+  if (res.status === 429) throw new Error("RATE_LIMIT");
+  if (res.status === 403) throw new Error("FORBIDDEN: token/plan lacks access to this resource");
   if (!res.ok) throw new Error(`API ${res.status} on ${path}`);
-  const json = await res.json();
-  return json.response || [];
+  return res.json();
 }
 
-// Sum one fixture's events into { canonicalName: { g, a } }, plus a log of unmatched scorers.
-function tallyFixture(events) {
-  const out = {};
-  const unmatched = new Set();
+function tallyMatch(match) {
+  const out = {}, unmatched = new Set();
   const add = (name, key) => {
     const canon = matchPlayer(name);
     if (!canon) { if (name) unmatched.add(name); return; }
     out[canon] = out[canon] || { g: 0, a: 0 };
     out[canon][key] += 1;
   };
-  for (const e of events) {
-    if (e.type !== "Goal") continue;
-    const detail = e.detail || "";
-    if (detail === "Own Goal" || detail === "Missed Penalty") continue; // not a goal for the player
-    add(e.player?.name, "g");
-    if (e.assist?.name) add(e.assist.name, "a");
+  for (const g of (match.goals || [])) {
+    if (g.type === "OWN") continue;
+    add(g.scorer && g.scorer.name, "g");
+    if (g.assist && g.assist.name) add(g.assist.name, "a");
   }
-  return { out, unmatched: [...unmatched] };
+  return { out, unmatched: [...unmatched], goalCount: (match.goals || []).length };
+}
+
+function aggregate(fixtureStats) {
+  const totals = {};
+  for (const bucket of Object.values(fixtureStats))
+    for (const [name, v] of Object.entries(bucket)) {
+      totals[name] = totals[name] || { g: 0, a: 0 };
+      totals[name].g += v.g; totals[name].a += v.a;
+    }
+  return totals;
 }
 
 export default async (req) => {
-  if (!process.env.API_FOOTBALL_KEY) {
-    return new Response("Missing API_FOOTBALL_KEY", { status: 500 });
-  }
+  if (!TOKEN) return new Response("Missing FOOTBALL_DATA_TOKEN (or API_FOOTBALL_KEY)", { status: 500 });
   const store = getStore("wc-blackjack");
   const url = new URL(req.url);
   const backfill = url.searchParams.get("backfill") === "1";
   const debug = url.searchParams.get("debug") === "1";
 
-  // --- diagnostic: find the right World Cup id/season and confirm coverage ---
   if (debug) {
-    const raw = async (p) => { const r = await fetch(`${API}${p}`, { headers }); return r.json(); };
-    const lg = await raw(`/leagues?search=world cup`);
-    const fx = await raw(`/fixtures?league=${LEAGUE}&season=${SEASON}`);
-    const worldCupLeagues = (lg.response || []).map(x => ({
-      id: x.league?.id, name: x.league?.name, type: x.league?.type,
-      country: x.country?.name, seasons: (x.seasons || []).map(s => s.year),
-    }));
-    return new Response(JSON.stringify({
-      configured: { LEAGUE, SEASON },
-      fixturesForConfigured: (fx.response || []).length,
-      apiErrors: { leagues: lg.errors, fixtures: fx.errors },
-      worldCupLeagues,
-    }, null, 2), { headers: { "content-type": "application/json" } });
+    try {
+      const comp = await api(`/competitions/${COMPETITION}/matches`);
+      const matches = comp.matches || [];
+      const byStatus = {};
+      for (const m of matches) byStatus[m.status] = (byStatus[m.status] || 0) + 1;
+      const sampleFinished = matches.find(m => DONE.has(m.status));
+      let sampleGoals = null;
+      if (sampleFinished) {
+        const d = await api(`/matches/${sampleFinished.id}`);
+        sampleGoals = (d.goals || []).map(g => ({ type: g.type, scorer: g.scorer?.name, assist: g.assist?.name || null }));
+      }
+      return new Response(JSON.stringify({
+        competition: COMPETITION, totalMatches: matches.length, byStatus,
+        sampleFinishedMatch: sampleFinished ? `${sampleFinished.homeTeam?.name} v ${sampleFinished.awayTeam?.name}` : null,
+        sampleGoals, assistsPresent: sampleGoals ? sampleGoals.some(g => g.assist) : null,
+      }, null, 2), { headers: { "content-type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: String(e.message || e) }, null, 2), { headers: { "content-type": "application/json" } });
+    }
   }
 
-  // --- daily budget guard ---
-  const today = new Date().toISOString().slice(0, 10);
-  const budget = (await store.get("budget", { type: "json" })) || { day: today, used: 0 };
-  if (budget.day !== today) { budget.day = today; budget.used = 0; }
-  if (budget.used >= MAX_DAILY_REQUESTS) {
-    return new Response("Daily request budget reached; try again tomorrow (free tier = 100/day).", { status: 200 });
-  }
-
-  const fixtureStats = (await store.get("fixtureStats", { type: "json" })) || {}; // {fid: {name:{g,a}}}
+  const fixtureStats = (await store.get("fixtureStats", { type: "json" })) || {};
   const finalized = new Set((await store.get("finalized", { type: "json" })) || []);
   const unmatchedLog = new Set((await store.get("unmatched", { type: "json" })) || []);
 
-  let calls = 0;
-  let toProcess = [];
+  let calls = 0, rateLimited = false;
+  try {
+    const comp = await api(`/competitions/${COMPETITION}/matches`); calls++;
+    const matches = comp.matches || [];
+    const live = matches.filter(m => LIVE.has(m.status));
+    const doneNew = matches.filter(m => DONE.has(m.status) && !finalized.has(m.id));
+    const toProcess = (backfill ? doneNew : [...live, ...doneNew]).slice(0, DETAILS_PER_RUN);
 
-  if (backfill) {
-    // One-time catch-up: every finished fixture in the tournament not yet processed.
-    // Bigger per-run cap (still timeout-safe) so the backlog clears in a few hits.
-    const all = await api(`/fixtures?league=${LEAGUE}&season=${SEASON}`); calls++;
-    toProcess = all
-      .filter(f => DONE.has(f.fixture.status.short) && !finalized.has(f.fixture.id))
-      .slice(0, BACKFILL_FETCHES_PER_RUN);
-  } else {
-    // Normal incremental mode: live now + finished since last run.
-    const live = await api(`/fixtures?league=${LEAGUE}&season=${SEASON}&live=all`); calls++;
-    const dates = [today, new Date(Date.now() - 864e5).toISOString().slice(0, 10)];
-    let finishedCandidates = [];
-    for (const d of dates) {
-      if (budget.used + calls >= MAX_DAILY_REQUESTS) break;
-      const day = await api(`/fixtures?league=${LEAGUE}&season=${SEASON}&date=${d}`); calls++;
-      finishedCandidates.push(...day.filter(f => DONE.has(f.fixture.status.short) && !finalized.has(f.fixture.id)));
+    if (toProcess.length === 0) {
+      await store.setJSON("stats", { updated: new Date().toISOString(), players: aggregate(fixtureStats) });
+      return new Response(backfill ? "Backfill complete — all finished matches processed."
+                                   : "Nothing live or newly finished.", { status: 200 });
     }
-    const liveFixtures = live.filter(f => LIVE.has(f.fixture.status.short));
-    toProcess = [...liveFixtures, ...finishedCandidates].slice(0, MAX_EVENT_FETCHES_PER_RUN);
-  }
 
-  if (toProcess.length === 0) {
-    budget.used += calls; await store.setJSON("budget", budget);
-    return new Response(backfill ? "Backfill complete — no more finished fixtures to process."
-                                 : "Nothing live or newly finished.", { status: 200 });
-  }
-
-  let remaining = 0;
-  for (const f of toProcess) {
-    if (budget.used + calls >= MAX_DAILY_REQUESTS) { remaining = 1; break; }
-    const fid = f.fixture.id;
-    const events = await api(`/fixtures/events?fixture=${fid}`); calls++;
-    const { out, unmatched } = tallyFixture(events);
-    fixtureStats[fid] = out;                       // overwrite this fixture's bucket
-    unmatched.forEach(u => unmatchedLog.add(u));
-    if (DONE.has(f.fixture.status.short)) finalized.add(fid); // lock finished matches
-  }
-
-  // --- aggregate every fixture bucket into the flat stats the frontend reads ---
-  const totals = {};
-  for (const bucket of Object.values(fixtureStats)) {
-    for (const [name, v] of Object.entries(bucket)) {
-      totals[name] = totals[name] || { g: 0, a: 0 };
-      totals[name].g += v.g; totals[name].a += v.a;
+    for (const m of toProcess) {
+      const detail = await api(`/matches/${m.id}`); calls++;
+      const { out, unmatched } = tallyMatch(detail);
+      fixtureStats[m.id] = out;
+      unmatched.forEach(u => unmatchedLog.add(u));
+      if (DONE.has(m.status)) finalized.add(m.id);
     }
+  } catch (e) {
+    if (String(e.message).includes("RATE_LIMIT")) rateLimited = true;
+    else throw e;
   }
 
-  budget.used += calls;
+  const totals = aggregate(fixtureStats);
   await Promise.all([
     store.setJSON("fixtureStats", fixtureStats),
     store.setJSON("finalized", [...finalized]),
     store.setJSON("unmatched", [...unmatchedLog]),
     store.setJSON("stats", { updated: new Date().toISOString(), players: totals }),
-    store.setJSON("budget", budget),
   ]);
 
-  const note = backfill
-    ? `Backfilled ${toProcess.length} fixture(s). ${(remaining||budget.used>=MAX_DAILY_REQUESTS) ? "Budget reached or more remain — run ?backfill=1 again to continue." : "If older games are still missing, run ?backfill=1 once more."}`
-    : `processed ${toProcess.length}`;
-  return new Response(JSON.stringify({ mode: backfill ? "backfill" : "incremental",
-    processed: toProcess.length, calls, dailyUsed: budget.used, note,
-    unmatched: [...unmatchedLog] }), { headers: { "content-type": "application/json" } });
+  const note = rateLimited
+    ? "Hit the 10/min rate limit mid-run — progress saved. Run again in ~1 minute to continue."
+    : (backfill ? "Backfilled a batch. If older games are still missing, run ?backfill=1 again (~1 min apart)." : `processed ${Math.max(calls - 1, 0)} match(es)`);
+  return new Response(JSON.stringify({
+    mode: backfill ? "backfill" : "incremental", calls, rateLimited,
+    finalizedCount: finalized.size, players: Object.keys(totals).length, note,
+    unmatched: [...unmatchedLog],
+  }), { headers: { "content-type": "application/json" } });
 };
 
-// Free tier = 100 requests/day, so polling cadence is budget-bound, not code-bound.
-// Every 10 min all day ≈ within budget (idle runs cost 1 request and exit; finished matches
-// are fetched once then locked). For tighter updates during games you actually watch, narrow
-// to match hours and speed up, e.g. "*/3 16-23 * * *" (every 3 min, 4–11pm) — fits budget
-// because it's a window, not all day. True minute-level needs a paid tier.
+// Every 10 min — far under the 10/min limit, and each run self-caps its calls.
 export const config = { schedule: "*/10 * * * *" };
