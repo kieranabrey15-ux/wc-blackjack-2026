@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hoppers · World Cup Blackjack</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+  :root{--felt:#0a2e22;--felt2:#08251b;--ink:#0a1f18;--bone:#ece3cf;--bone2:#b9b09a;--sage:#7f9384;
+    --gold:#cda434;--gold2:#e6c75e;--bust:#b0413c;--hit:#52a76e;--half:#caa23a;}
+  *{box-sizing:border-box;}
+  body{font-family:'Inter',system-ui,sans-serif;margin:0;color:var(--bone);min-height:100vh;
+    background:radial-gradient(120% 80% at 50% -10%, #11402f 0%, var(--felt) 45%, var(--felt2) 100%);
+    padding:22px 16px 60px;}
+  .wrap{max-width:1080px;margin:0 auto;}
+  .masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    border-bottom:1px solid rgba(205,164,52,.35);padding-bottom:16px;margin-bottom:18px;}
+  .eyebrow{font-family:'Oswald';text-transform:uppercase;letter-spacing:.32em;font-size:11px;color:var(--gold2);margin:0 0 6px;}
+  .title{font-family:'Oswald';font-weight:700;text-transform:uppercase;letter-spacing:.02em;font-size:34px;line-height:.95;margin:0;}
+  .title b{color:var(--gold2);}
+  .live{font-size:11px;color:var(--sage);margin-top:7px;display:flex;align-items:center;gap:7px;}
+  .live .dot{width:7px;height:7px;border-radius:50%;background:var(--sage);}
+  .live.on .dot{background:var(--hit);box-shadow:0 0 8px var(--hit);}
+  .pot{text-align:right;font-family:'Oswald';}
+  .pot .lbl{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--sage);}
+  .pot .val{font-size:30px;font-weight:700;color:var(--gold2);line-height:1;}
+  .strips{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}
+  .strip{background:rgba(0,0,0,.22);border:1px solid rgba(236,227,207,.1);border-radius:10px;padding:11px 13px;}
+  .strip .n{font-family:'Oswald';font-size:26px;font-weight:600;line-height:1;}
+  .strip .k{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--sage);margin-top:5px;}
+  .strip.q .n{color:var(--gold2);} .strip.b .n{color:var(--bust);}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+  .seg{display:inline-flex;background:rgba(0,0,0,.25);border:1px solid rgba(236,227,207,.12);border-radius:9px;overflow:hidden;}
+  .seg button{font-family:'Oswald';letter-spacing:.08em;text-transform:uppercase;font-size:12px;background:transparent;
+    color:var(--bone2);border:0;padding:8px 14px;cursor:pointer;}
+  .seg button.on{background:var(--gold);color:#1d1403;font-weight:600;}
+  .spacer{flex:1;}
+  .btn{font-family:'Oswald';letter-spacing:.1em;text-transform:uppercase;font-size:12px;cursor:pointer;
+    background:transparent;color:var(--gold2);border:1px solid rgba(205,164,52,.5);border-radius:9px;padding:8px 14px;}
+  .btn:hover{background:rgba(205,164,52,.12);}
+  .card{background:linear-gradient(180deg, rgba(15,52,38,.55), rgba(6,32,23,.55));
+    border:1px solid rgba(236,227,207,.1);border-radius:12px;padding:13px 15px;margin-bottom:9px;position:relative;}
+  .card.mine{border-color:rgba(230,199,94,.55);box-shadow:0 0 0 1px rgba(230,199,94,.18) inset;}
+  .card.bust{opacity:.5;}
+  .card.leader{border-color:var(--gold2);box-shadow:0 0 22px rgba(230,199,94,.18);}
+  .crow{display:flex;align-items:center;gap:12px;}
+  .rank{font-family:'Oswald';font-size:13px;color:var(--sage);width:26px;text-align:center;flex:none;}
+  .who{flex:1;min-width:0;}
+  .who .nm{font-family:'Oswald';font-size:17px;font-weight:600;letter-spacing:.01em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .pill{font-size:9px;font-family:'Oswald';letter-spacing:.12em;padding:2px 6px;border-radius:5px;border:1px solid currentColor;}
+  .pill.mine{color:var(--gold2);} .pill.tag{color:var(--sage);}
+  .crown{color:var(--gold2);font-size:14px;}
+  .score{text-align:right;flex:none;}
+  .score .big{font-family:'Oswald';font-size:30px;font-weight:700;line-height:.9;}
+  .score .big.ok{color:var(--bone);} .score .big.q{color:var(--gold2);} .score .big.x{color:var(--bust);text-decoration:line-through;}
+  .score .sub{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--sage);margin-top:3px;}
+  .track{height:6px;border-radius:4px;background:rgba(0,0,0,.3);margin:11px 0 10px;overflow:hidden;}
+  .track .fill{height:100%;background:linear-gradient(90deg,var(--hit),var(--gold));border-radius:4px;}
+  .track .fill.x{background:repeating-linear-gradient(45deg,var(--bust),var(--bust) 6px,#7d2c29 6px,#7d2c29 12px);width:100%;}
+  .chips{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;}
+  .chip{background:rgba(0,0,0,.22);border:1px solid rgba(236,227,207,.08);border-radius:8px;padding:7px 8px;min-width:0;}
+  .chip.hit{border-color:rgba(82,167,110,.4);}
+  .chip .cn{font-size:11px;color:var(--bone2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chip .cg{font-family:'Oswald';font-size:14px;margin-top:3px;display:flex;align-items:center;gap:6px;}
+  .dot2{width:7px;height:7px;border-radius:50%;flex:none;background:var(--sage);}
+  .dot2.hit{background:var(--hit);} .dot2.half{background:var(--half);}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--sage);margin:6px 2px 18px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .note{background:rgba(0,0,0,.25);border:1px solid rgba(236,227,207,.12);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--bone2);}
+  .note b{color:var(--gold2);font-family:'Oswald';letter-spacing:.04em;}
+  .note code{background:rgba(0,0,0,.35);padding:1px 5px;border-radius:4px;font-size:11px;}
+  .panel{position:fixed;right:0;top:0;height:100vh;width:340px;max-width:90vw;background:var(--ink);
+    border-left:1px solid rgba(205,164,52,.4);padding:18px;overflow-y:auto;z-index:50;box-shadow:-20px 0 60px rgba(0,0,0,.5);}
+  .panel h3{font-family:'Oswald';text-transform:uppercase;letter-spacing:.1em;font-size:15px;margin:0 0 4px;color:var(--gold2);}
+  .panel p{font-size:11px;color:var(--sage);margin:0 0 14px;}
+  .search{width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(236,227,207,.15);border-radius:8px;
+    color:var(--bone);padding:9px 11px;font-size:13px;margin-bottom:12px;font-family:'Inter';}
+  .prow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(236,227,207,.07);}
+  .prow .pnm{flex:1;font-size:12px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .prow.ov .pnm{color:var(--gold2);}
+  .stepper{display:flex;align-items:center;gap:4px;}
+  .stepper .lab{font-size:9px;color:var(--sage);width:10px;}
+  .stepper button{width:22px;height:22px;border-radius:6px;border:1px solid rgba(236,227,207,.2);background:rgba(0,0,0,.3);
+    color:var(--bone);cursor:pointer;font-size:13px;line-height:1;}
+  .stepper .v{font-family:'Oswald';width:16px;text-align:center;font-size:14px;}
+  .closeX{position:absolute;top:14px;right:16px;background:none;border:0;color:var(--sage);font-size:20px;cursor:pointer;}
+  textarea{width:100%;height:90px;background:rgba(0,0,0,.3);border:1px solid rgba(236,227,207,.15);
+    border-radius:8px;color:var(--bone);font-size:11px;padding:8px;font-family:monospace;}
+  .um-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .um-list span{background:rgba(176,65,60,.15);border:1px solid rgba(176,65,60,.4);color:#e8b3b0;
+    border-radius:6px;padding:3px 8px;font-size:12px;}
+  @media(max-width:760px){
+    .strips{grid-template-columns:repeat(2,1fr);} .chips{grid-template-columns:repeat(3,1fr);}
+    .title{font-size:26px;} .score .big{font-size:24px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <div>
+      <p class="eyebrow">Hoppers League · Group Stage</p>
+      <h1 class="title">World Cup <b>Blackjack</b></h1>
+      <div class="live" id="liveBadge"><span class="dot"></span><span id="liveText">Manual mode — stats entered by hand</span></div>
+    </div>
+    <div class="pot"><div class="lbl">Winner takes</div><div class="val" id="pot">£540</div></div>
+  </div>
+
+  <div class="strips">
+    <div class="strip"><div class="n" id="sAlive">–</div><div class="k">Still in</div></div>
+    <div class="strip b"><div class="n" id="sBust">–</div><div class="k">Bust</div></div>
+    <div class="strip q"><div class="n" id="sQual">–</div><div class="k">Qualified 6/6</div></div>
+    <div class="strip"><div class="n" id="sTotal">–</div><div class="k">Entries</div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg" id="filters">
+      <button data-f="all" class="on">All</button>
+      <button data-f="alive">Still in</button>
+      <button data-f="bust">Bust</button>
+      <button data-f="mine">Mine</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="btnRefresh">↻ Refresh</button>
+    <button class="btn" id="btnUpdate">Update tallies</button>
+    <button class="btn" id="btnUnmatched">Unmatched</button>
+    <button class="btn" id="btnIO">Save / load</button>
+  </div>
+
+  <div class="note" id="ioBox" style="display:none">
+    <p style="margin:0 0 6px;color:var(--sage)">Copy this to keep your manual corrections, or paste a saved copy and load it.</p>
+    <textarea id="ioText"></textarea>
+    <div style="margin-top:8px"><button class="btn" id="btnLoad">Load pasted progress</button></div>
+  </div>
+
+  <div class="note" id="umBox" style="display:none">
+    <b>Unmatched scorers</b> — names the feed couldn't tie to a pick. If one of <i>your</i> players is here,
+    they're spelled differently by the API; tell me and I'll add the alias.
+    <div class="um-list" id="umList"></div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot2 hit"></span> Scored or assisted (counts)</span>
+    <span><span class="dot2"></span> Yet to register</span>
+    <span style="color:var(--gold2)">◆ Best placed</span>
+  </div>
+
+  <div id="board"></div>
+</div>
+
+<div class="panel" id="panel" style="display:none">
+  <button class="closeX" id="closePanel">×</button>
+  <h3>Update tallies</h3>
+  <p>Manual entries override the live feed — use them when the API and Pickd disagree on an assist. Highlighted = overridden.</p>
+  <input class="search" id="psearch" placeholder="Search a player…" />
+  <div id="plist"></div>
+</div>
+
+<script>
+const POT = 540;
+const PLAYERS = {"Achraf Hakimi": ["Morocco", 0.18, 0.28], "Alexis Mac Allister": ["Argentina", 0.2, 0.25], "Alphonso Davies": ["Canada", 0.15, 0.25], "Amad Diallo": ["IvoryCoast", 0.3, 0.25], "Antoine Semenyo": ["Ghana", 0.35, 0.2], "Antonee Robinson": ["USA", 0.06, 0.25], "Antonio Nusa": ["Norway", 0.28, 0.26], "Arda Güler": ["Turkey", 0.3, 0.32], "Ayase Ueda": ["Japan", 0.4, 0.1], "Bernardo Silva": ["Portugal", 0.25, 0.3], "Borja Iglesias": ["Spain", 0.18, 0.06], "Brahim Díaz": ["Morocco", 0.3, 0.25], "Breel Embolo": ["Switzerland", 0.4, 0.15], "Bruno Fernandes": ["Portugal", 0.35, 0.35], "Bukayo Saka": ["England", 0.26, 0.28], "Casemiro": ["Brazil", 0.12, 0.1], "Christian Pulisic": ["USA", 0.4, 0.3], "Cody Gakpo": ["Netherlands", 0.42, 0.26], "Cristiano Ronaldo": ["Portugal", 0.55, 0.12], "Dani Olmo": ["Spain", 0.27, 0.23], "Declan Rice": ["England", 0.1, 0.15], "Denzel Dumfries": ["Netherlands", 0.22, 0.22], "Diego Moreira": ["Belgium", 0.08, 0.15], "Désiré Doué": ["France", 0.3, 0.28], "Eberechi Eze": ["England", 0.25, 0.25], "Edin Džeko": ["Bosnia", 0.4, 0.12], "Endrick": ["Brazil", 0.3, 0.06], "Enner Valencia": ["Ecuador", 0.4, 0.1], "Enzo Fernández": ["Argentina", 0.18, 0.25], "Erling Haaland": ["Norway", 0.78, 0.14], "Fabinho": ["Brazil", 0.06, 0.08], "Federico Valverde": ["Uruguay", 0.25, 0.2], "Ferran Torres": ["Spain", 0.36, 0.2], "Florian Wirtz": ["Germany", 0.36, 0.4], "Gabriel": ["Brazil", 0.12, 0.04], "Gilberto Mora": ["Mexico", 0.25, 0.22], "Granit Xhaka": ["Switzerland", 0.1, 0.2], "Hakan Çalhanoğlu": ["Turkey", 0.3, 0.25], "Harry Kane": ["England", 0.7, 0.24], "Heung-min Son": ["SouthKorea", 0.46, 0.3], "Igor Thiago": ["Brazil", 0.35, 0.08], "Ismaïla Sarr": ["Senegal", 0.3, 0.22], "Jamal Musiala": ["Germany", 0.34, 0.28], "James Rodríguez": ["Colombia", 0.27, 0.33], "Jamie Leweling": ["Germany", 0.15, 0.15], "Jhon Arias": ["Colombia", 0.22, 0.3], "John McGinn": ["Scotland", 0.22, 0.18], "Jonathan David": ["Canada", 0.45, 0.15], "Joshua Kimmich": ["Germany", 0.08, 0.28], "João Cancelo": ["Portugal", 0.12, 0.25], "João Félix": ["Portugal", 0.3, 0.2], "João Neves": ["Portugal", 0.18, 0.22], "Jude Bellingham": ["England", 0.34, 0.26], "Julián Álvarez": ["Argentina", 0.42, 0.24], "Jérémy Doku": ["Belgium", 0.25, 0.32], "Kai Havertz": ["Germany", 0.45, 0.2], "Kevin De Bruyne": ["Belgium", 0.25, 0.36], "Kylian Mbappé": ["France", 0.74, 0.3], "Lamine Yamal": ["Spain", 0.42, 0.46], "Lautaro Martínez": ["Argentina", 0.55, 0.14], "Leandro Trossard": ["Belgium", 0.28, 0.22], "Leroy Sané": ["Germany", 0.3, 0.24], "Lionel Messi": ["Argentina", 0.5, 0.4], "Luis Díaz": ["Colombia", 0.44, 0.22], "Luka Modrić": ["Croatia", 0.12, 0.25], "Marko Arnautovic": ["Austria", 0.45, 0.15], "Martin Ødegaard": ["Norway", 0.14, 0.22], "Memphis Depay": ["Netherlands", 0.44, 0.26], "Michael Olise": ["France", 0.34, 0.36], "Mikel Merino": ["Spain", 0.2, 0.15], "Mikel Oyarzabal": ["Spain", 0.46, 0.24], "Mohamed Amoura": ["Algeria", 0.45, 0.24], "Mohamed Salah": ["Egypt", 0.58, 0.3], "Neymar": ["Brazil", 0.3, 0.28], "Nico Paz": ["Argentina", 0.2, 0.25], "Nico Williams": ["Spain", 0.32, 0.28], "Nuno Mendes": ["Portugal", 0.1, 0.2], "Ousmane Dembélé": ["France", 0.5, 0.36], "Pau Cubarsí": ["Spain", 0.04, 0.06], "Pedri": ["Spain", 0.15, 0.25], "Pedro Neto": ["Portugal", 0.22, 0.24], "Rafael Leão": ["Portugal", 0.38, 0.26], "Raphinha": ["Brazil", 0.46, 0.34], "Rayan": ["Brazil", 0.2, 0.12], "Rayan Cherki": ["France", 0.18, 0.3], "Ricardo Pepi": ["USA", 0.38, 0.1], "Ritsu Doan": ["Japan", 0.28, 0.22], "Riyad Mahrez": ["Algeria", 0.35, 0.3], "Roberto Alvarado": ["Mexico", 0.24, 0.24], "Rodri": ["Spain", 0.1, 0.15], "Rubén Vargas": ["Switzerland", 0.25, 0.22], "Sadio Mané": ["Senegal", 0.38, 0.18], "Scott McTominay": ["Scotland", 0.35, 0.1], "Takefusa Kubo": ["Japan", 0.3, 0.28], "Tijjani Reijnders": ["Netherlands", 0.2, 0.2], "Tyler Adams": ["USA", 0.06, 0.1], "Viktor Gyökeres": ["Sweden", 0.55, 0.12], "Vinicius Junior": ["Brazil", 0.4, 0.3], "Vitinha": ["Portugal", 0.16, 0.24], "Vladimír Coufal": ["Czech", 0.04, 0.1], "Yerry Mina": ["Colombia", 0.1, 0.02], "Youri Tielemans": ["Belgium", 0.18, 0.25]};
+const TEAMS = {"Mexico": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Norway": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Czech": [0.3, 0.32, 0.22, 0.1, 0.04, 0.02], "Egypt": [0.3, 0.32, 0.22, 0.1, 0.04, 0.02], "France": [0.05, 0.1, 0.16, 0.22, 0.22, 0.25], "Colombia": [0.1, 0.17, 0.24, 0.24, 0.15, 0.1], "Portugal": [0.05, 0.1, 0.16, 0.22, 0.22, 0.25], "Senegal": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Bosnia": [0.3, 0.32, 0.22, 0.1, 0.04, 0.02], "Argentina": [0.05, 0.1, 0.16, 0.22, 0.22, 0.25], "Ecuador": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Canada": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Belgium": [0.1, 0.17, 0.24, 0.24, 0.15, 0.1], "Turkey": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Brazil": [0.05, 0.1, 0.16, 0.22, 0.22, 0.25], "Ghana": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "IvoryCoast": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Sweden": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Germany": [0.05, 0.1, 0.16, 0.22, 0.22, 0.25], "Morocco": [0.1, 0.17, 0.24, 0.24, 0.15, 0.1], "Algeria": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Netherlands": [0.1, 0.17, 0.24, 0.24, 0.15, 0.1], "Switzerland": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Scotland": [0.3, 0.32, 0.22, 0.1, 0.04, 0.02], "England": [0.05, 0.1, 0.16, 0.22, 0.22, 0.25], "Spain": [0.05, 0.1, 0.16, 0.22, 0.22, 0.25], "Uruguay": [0.1, 0.17, 0.24, 0.24, 0.15, 0.1], "USA": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "Japan": [0.16, 0.26, 0.28, 0.16, 0.09, 0.05], "SouthKorea": [0.3, 0.32, 0.22, 0.1, 0.04, 0.02], "Croatia": [0.1, 0.17, 0.24, 0.24, 0.15, 0.1], "Austria": [0.3, 0.32, 0.22, 0.1, 0.04, 0.02]};
+const ENTRIES = [
+  {name:"Kieran Abrey",tag:"S1",mine:true,picks:["Mohamed Salah","Heung-min Son","Cody Gakpo","Christian Pulisic","James Rodríguez","Roberto Alvarado"]},
+  {name:"Kieran Abrey",tag:"S2",mine:true,picks:["Bernardo Silva","Nico Williams","Takefusa Kubo","Riyad Mahrez","Jude Bellingham","Antonio Nusa"]},
+  {name:"Scott Abrey",tag:"S4",mine:true,picks:["Memphis Depay","Kevin De Bruyne","Christian Pulisic","Vinicius Junior","Jamal Musiala","Nico Williams"]},
+  {name:"Stuart Abrey",tag:"S3",mine:true,picks:["Memphis Depay","Kevin De Bruyne","Hakan Çalhanoğlu","Dani Olmo","Mohamed Amoura","Arda Güler"]},
+  {name:"Karen White",picks:["Rodri","Vinicius Junior","Michael Olise","Ricardo Pepi","Jude Bellingham","Nuno Mendes"]},
+  {name:"Gary Gorman",picks:["Harry Kane","Cody Gakpo","Vinicius Junior","Rayan Cherki","Julián Álvarez","Jamal Musiala"]},
+  {name:"Jack Leonard",picks:["Cristiano Ronaldo","Harry Kane","Bruno Fernandes","Mikel Oyarzabal","Michael Olise","Lamine Yamal"]},
+  {name:"Alex Greenfield",picks:["Marko Arnautovic","Cody Gakpo","Bruno Fernandes","Brahim Díaz","Jhon Arias","Antoine Semenyo"]},
+  {name:"Richard Da Costa",picks:["Harry Kane","Mohamed Salah","Kylian Mbappé","Bruno Fernandes","Lionel Messi","Vinicius Junior"]},
+  {name:"Ben Diment",picks:["Hakan Çalhanoğlu","Joshua Kimmich","Raphinha","Achraf Hakimi","Federico Valverde","Michael Olise"]},
+  {name:"Harry Metters",picks:["Kai Havertz","Rayan Cherki","Julián Álvarez","Jérémy Doku","Jude Bellingham","Lamine Yamal"]},
+  {name:"Leslie White",picks:["Harry Kane","Kevin De Bruyne","Kylian Mbappé","Raphinha","Bukayo Saka","Pedri"]},
+  {name:"Joe Rahilly",picks:["Harry Kane","Kai Havertz","Bruno Fernandes","Rayan Cherki","Julián Álvarez","Jude Bellingham"]},
+  {name:"Liam Frost",picks:["Declan Rice","Denzel Dumfries","Kai Havertz","Casemiro","Brahim Díaz","Arda Güler"]},
+  {name:"Fahid Elgheriani",picks:["Dani Olmo","Kylian Mbappé","Lionel Messi","Ritsu Doan","Vinicius Junior","Ayase Ueda"]},
+  {name:"Jack Woolgar",picks:["Cristiano Ronaldo","Harry Kane","Christian Pulisic","Bruno Fernandes","Viktor Gyökeres","Florian Wirtz"]},
+  {name:"Dan Angove",picks:["Harry Kane","Kevin De Bruyne","Hakan Çalhanoğlu","Achraf Hakimi","Michael Olise","Pau Cubarsí"]},
+  {name:"Nathan Foster",picks:["Declan Rice","Breel Embolo","Mikel Oyarzabal","Michael Olise","Jamal Musiala","Endrick"]},
+  {name:"Nancy Leonard",picks:["Denzel Dumfries","Kylian Mbappé","Julián Álvarez","Jamal Musiala","Igor Thiago","Lamine Yamal"]},
+  {name:"Ted Gorman",picks:["Declan Rice","Bernardo Silva","Lionel Messi","Neymar","Rayan Cherki","Jérémy Doku"]},
+  {name:"Matt Fancourt",picks:["Kai Havertz","Vinicius Junior","Bukayo Saka","Michael Olise","Jude Bellingham","João Neves"]},
+  {name:"Henry Hodgson",picks:["Riyad Mahrez","Kai Havertz","Federico Valverde","Julián Álvarez","Jérémy Doku","Arda Güler"]},
+  {name:"Bradley Buck",picks:["Harry Kane","Bruno Fernandes","Julián Álvarez","Michael Olise","Enzo Fernández","Jamal Musiala"]},
+  {name:"Jack Fancourt",picks:["Cody Gakpo","Kai Havertz","Leandro Trossard","Raphinha","Bukayo Saka","Arda Güler"]},
+  {name:"Craig Gallagher",picks:["Harry Kane","Cody Gakpo","Bruno Fernandes","Erling Haaland","Julián Álvarez","Michael Olise"]},
+  {name:"James Gorman",picks:["Harry Kane","Christian Pulisic","Kylian Mbappé","Rafael Leão","Jamal Musiala","Lamine Yamal"]},
+  {name:"Sophie Hopper",picks:["Harry Kane","Denzel Dumfries","Kylian Mbappé","Bruno Fernandes","John McGinn","Lamine Yamal"]},
+  {name:"Jack Cubitt",picks:["Martin Ødegaard","Bernardo Silva","Achraf Hakimi","Jérémy Doku","Enzo Fernández","Florian Wirtz"]},
+  {name:"Rigers Kabashi",picks:["Harry Kane","Christian Pulisic","Bruno Fernandes","Alexis Mac Allister","Federico Valverde","Julián Álvarez"]},
+  {name:"Dan Foster",picks:["Harry Kane","Edin Džeko","Kevin De Bruyne","Declan Rice","Achraf Hakimi","Jamal Musiala"]},
+  {name:"James May",picks:["Bruno Fernandes","Ferran Torres","Vinicius Junior","Michael Olise","Jamal Musiala","Jude Bellingham"]},
+  {name:"Stu Hopper",picks:["Leroy Sané","Ismaïla Sarr","Pedro Neto","Igor Thiago","Désiré Doué","Nico Paz"]},
+  {name:"Raehben Montrose",picks:["Granit Xhaka","Declan Rice","Mikel Merino","Youri Tielemans","Gabriel","Jamal Musiala"]},
+  {name:"Emily Gallagher",picks:["Kylian Mbappé","Mikel Oyarzabal","Luis Díaz","Vinicius Junior","Jamal Musiala","Lamine Yamal"]},
+  {name:"Liam Lewis",picks:["Mohamed Salah","Leroy Sané","Cody Gakpo","Luis Díaz","Jude Bellingham","Amad Diallo"]},
+  {name:"David Huntingford",picks:["Cristiano Ronaldo","Harry Kane","Kevin De Bruyne","Sadio Mané","Raphinha","Michael Olise"]},
+  {name:"Ali Dabaiba",picks:["Harry Kane","Cody Gakpo","Christian Pulisic","Dani Olmo","Bruno Fernandes","Michael Olise"]},
+  {name:"Sam Baker",picks:["Eberechi Eze","Denzel Dumfries","Martin Ødegaard","Alphonso Davies","Brahim Díaz","Scott McTominay"]},
+  {name:"Rory Gib",picks:["Erling Haaland","Vitinha","Jérémy Doku","Michael Olise","Jamal Musiala","Jude Bellingham"]},
+  {name:"Jack Hopper",picks:["Dani Olmo","João Cancelo","Rubén Vargas","Jérémy Doku","Michael Olise","Arda Güler"]},
+  {name:"Jim Randall",picks:["Harry Kane","Bruno Fernandes","Scott McTominay","Jérémy Doku","Michael Olise","Jamal Musiala"]},
+  {name:"Henry Lyon",picks:["Harry Kane","Mohamed Salah","Heung-min Son","Declan Rice","Christian Pulisic","Raphinha"]},
+  {name:"Jody Baxter",picks:["Luka Modrić","Bruno Fernandes","Julián Álvarez","Jérémy Doku","Michael Olise","Jude Bellingham"]},
+  {name:"Daniel Moore",picks:["Vladimír Coufal","Raphinha","Antonee Robinson","Tijjani Reijnders","Jude Bellingham","Gilberto Mora"]},
+  {name:"Paul Keilty",picks:["Harry Kane","Granit Xhaka","Declan Rice","Kylian Mbappé","Erling Haaland","Jamal Musiala"]},
+  {name:"Danny Rahilly",picks:["Harry Kane","Kylian Mbappé","Bruno Fernandes","Vinicius Junior","Julián Álvarez","Lamine Yamal"]},
+  {name:"Jane Hopper",picks:["Harry Kane","Ousmane Dembélé","Fabinho","Borja Iglesias","Jamie Leweling","Diego Moreira"]},
+  {name:"Joe Charlesworth",picks:["Leroy Sané","João Félix","John McGinn","Lionel Messi","Yerry Mina","Tyler Adams"]},
+  {name:"Alex Phylactou",picks:["Harry Kane","Kylian Mbappé","Bruno Fernandes","Lionel Messi","Vinicius Junior","Lamine Yamal"]},
+  {name:"Felix Habgood",picks:["Harry Kane","Kai Havertz","Bruno Fernandes","Vinicius Junior","Michael Olise","Lamine Yamal"]},
+  {name:"Phil Hopper",picks:["Harry Kane","Pedro Neto","Michael Olise","Enzo Fernández","Pedri","Florian Wirtz"]},
+  {name:"Sam Gainey",picks:["Harry Kane","Mikel Merino","Lautaro Martínez","Bukayo Saka","Michael Olise","Rayan"]},
+  {name:"Daniel Mitchell",picks:["Harry Kane","Christian Pulisic","Federico Valverde","Jérémy Doku","Michael Olise","Pedri"]},
+  {name:"Ryan Hardie",picks:["Enner Valencia","Christian Pulisic","Viktor Gyökeres","Jonathan David","Jude Bellingham","Florian Wirtz"]},
+  {name:"Danny Gorman",picks:["Harry Kane","Ousmane Dembélé","Bruno Fernandes","Erling Haaland","Jérémy Doku","Jude Bellingham"]},
+];
+// Matchday-1 banked tallies (fallback until the live feed takes over)
+const SEED = { "Roberto Alvarado":{g:0,a:1}, "Vladimír Coufal":{g:0,a:1} };
+
+let apiStats = {};
+let overrides = loadOverrides();
+let filter = "all";
+let query = "";
+
+function loadOverrides(){ try { return JSON.parse(localStorage.getItem("wcb_overrides")||"{}"); } catch { return {}; } }
+function saveOverrides(){ try { localStorage.setItem("wcb_overrides", JSON.stringify(overrides)); } catch {} }
+
+function baseline(){ const s={}; ENTRIES.forEach(e=>e.picks.forEach(p=>{ if(!s[p]) s[p]={g:0,a:0}; })); return s; }
+function merged(){
+  const s = baseline();
+  for(const [n,v] of Object.entries(SEED)) s[n]={...s[n],...v};
+  for(const [n,v] of Object.entries(apiStats)) s[n]={...s[n],...v};
+  for(const [n,v] of Object.entries(overrides)) s[n]={...s[n],...v};
+  return s;
+}
+const lastName = n => { const p=n.trim().split(" "); return p.length>1?p.slice(1).join(" "):n; };
+// How players are commonly known on the chips (overrides the surname default where it reads wrong)
+const SHORT = {
+  "Vinicius Junior":"Vini Jr","Cristiano Ronaldo":"Ronaldo","James Rodríguez":"James","Heung-min Son":"Son",
+  "Kevin De Bruyne":"De Bruyne","Hakan Çalhanoğlu":"Çalhanoğlu","Roberto Alvarado":"Alvarado",
+  "Bernardo Silva":"Bernardo","Mohamed Salah":"Salah","Lamine Yamal":"Yamal","Kylian Mbappé":"Mbappé",
+  "Erling Haaland":"Haaland","Jude Bellingham":"Bellingham","Bukayo Saka":"Saka","Lautaro Martínez":"Lautaro",
+  "Julián Álvarez":"J. Álvarez","Lionel Messi":"Messi","Memphis Depay":"Depay","Nico Williams":"N. Williams"
+};
+const shortName = n => SHORT[n] || lastName(n);
+
+function computeRows(stats){
+  const rows = ENTRIES.map((e,idx)=>{
+    let total=0,hitters=0;
+    const players = e.picks.map(p=>{
+      const st = stats[p]||{g:0,a:0}; total+=st.g+st.a;
+      const hit = st.g>=1 || st.a>=1; if(hit) hitters++;
+      return {name:p,g:st.g,a:st.a,hit,half:false};
+    });
+    const bust = total>21, qualified = hitters===6 && !bust;
+    return {...e,idx,players,total,hitters,bust,qualified};
+  });
+  rows.sort((a,b)=>{
+    if(a.bust!==b.bust) return a.bust?1:-1;
+    if(a.bust&&b.bust) return b.total-a.total;
+    if(a.qualified!==b.qualified) return a.qualified?-1:1;
+    if(b.hitters!==a.hitters) return b.hitters-a.hitters;
+    return b.total-a.total;
+  });
+  return rows;
+}
+
+function render(){
+  const stats = merged();
+  const rows = computeRows(stats);
+  const alive = rows.filter(r=>!r.bust);
+  const leaderIdx = alive.length?alive[0].idx:null;
+  document.getElementById("pot").textContent = "£"+POT;
+  document.getElementById("sAlive").textContent = alive.length;
+  document.getElementById("sBust").textContent = rows.length-alive.length;
+  document.getElementById("sQual").textContent = rows.filter(r=>r.qualified).length;
+  document.getElementById("sTotal").textContent = rows.length;
+
+  const visible = rows.filter(r=>{
+    if(filter==="alive"&&r.bust) return false;
+    if(filter==="bust"&&!r.bust) return false;
+    if(filter==="mine"&&!r.mine) return false;
+    return true;
+  });
+
+  const board = document.getElementById("board");
+  board.innerHTML = visible.map((r,vi)=>{
+    const cls = ["card", r.mine?"mine":"", r.bust?"bust":"", r.idx===leaderIdx?"leader":""].join(" ").trim();
+    const bigCls = r.bust?"x":r.qualified?"q":"ok";
+    const chips = r.players.map(p=>{
+      const d = p.hit?"hit":p.half?"half":"";
+      return `<div class="chip ${p.hit?"hit":""}"><div class="cn" title="${p.name}">${shortName(p.name)}</div>
+        <div class="cg"><span class="dot2 ${d}"></span>${p.g}-${p.a}</div></div>`;
+    }).join("");
+    const pills = (r.tag?`<span class="pill tag">${r.tag}</span>`:"") + (r.mine?`<span class="pill mine">You</span>`:"");
+    return `<div class="${cls}">
+      <div class="crow">
+        <div class="rank">${r.bust?"—":vi+1}</div>
+        <div class="who"><div class="nm">${r.idx===leaderIdx?'<span class="crown">◆</span>':""}${r.name}${pills}</div></div>
+        <div class="score"><div class="big ${bigCls}">${r.total}</div><div class="sub">${r.bust?"Bust":r.hitters+"/6 in"}</div></div>
+      </div>
+      <div class="track"><div class="fill ${r.bust?"x":""}" style="width:${Math.min(r.total,21)/21*100}%"></div></div>
+      <div class="chips">${chips}</div>
+    </div>`;
+  }).join("");
+  if(document.getElementById("panel").style.display!=="none") renderPanel();
+}
+
+function renderPanel(){
+  const stats = merged();
+  const names = Object.keys(stats).sort((a,b)=>a.localeCompare(b)).filter(p=>p.toLowerCase().includes(query.toLowerCase()));
+  document.getElementById("plist").innerHTML = names.map(p=>{
+    const st = stats[p], ov = overrides[p]!==undefined;
+    return `<div class="prow ${ov?"ov":""}">
+      <div class="pnm" title="${p}">${p}</div>
+      <div class="stepper"><span class="lab">G</span>
+        <button data-p="${p}" data-k="g" data-d="-1">–</button><span class="v">${st.g}</span><button data-p="${p}" data-k="g" data-d="1">+</button></div>
+      <div class="stepper"><span class="lab">A</span>
+        <button data-p="${p}" data-k="a" data-d="-1">–</button><span class="v">${st.a}</span><button data-p="${p}" data-k="a" data-d="1">+</button></div>
+    </div>`;
+  }).join("");
+}
+
+function bump(player,key,delta){
+  const cur = overrides[player] || {...(merged()[player]||{g:0,a:0})};
+  cur[key] = Math.max(0, cur[key]+delta);
+  overrides[player] = cur;
+  saveOverrides(); render();
+}
+
+// --- events ---
+document.getElementById("filters").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  filter=b.dataset.f;
+  [...e.currentTarget.children].forEach(c=>c.classList.toggle("on",c===b));
+  render();
+});
+document.getElementById("btnRefresh").onclick=()=>{
+  const b=document.getElementById("btnRefresh");
+  b.textContent="↻ Refreshing…"; b.disabled=true;
+  Promise.resolve(loadStats()).finally(()=>{ setTimeout(()=>{ b.textContent="↻ Refresh"; b.disabled=false; }, 800); });
+};
+document.getElementById("btnUpdate").onclick=()=>{ const p=document.getElementById("panel"); p.style.display="block"; renderPanel(); };
+document.getElementById("closePanel").onclick=()=>{ document.getElementById("panel").style.display="none"; };
+document.getElementById("psearch").addEventListener("input",e=>{ query=e.target.value; renderPanel(); });
+document.getElementById("plist").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  bump(b.dataset.p, b.dataset.k, parseInt(b.dataset.d,10));
+});
+document.getElementById("btnIO").onclick=()=>{
+  const box=document.getElementById("ioBox");
+  const show = box.style.display==="none";
+  box.style.display = show?"block":"none";
+  if(show) document.getElementById("ioText").value = JSON.stringify(overrides);
+};
+document.getElementById("btnLoad").onclick=()=>{
+  try { overrides = JSON.parse(document.getElementById("ioText").value)||{}; saveOverrides(); render();
+        document.getElementById("ioBox").style.display="none"; }
+  catch { alert("That isn't valid saved progress."); }
+};
+document.getElementById("btnUnmatched").onclick=async()=>{
+  const box=document.getElementById("umBox"), list=document.getElementById("umList");
+  const show = box.style.display==="none"; box.style.display = show?"block":"none";
+  if(!show) return;
+  list.innerHTML = "<span style='background:none;border:none;color:var(--sage)'>checking…</span>";
+  try{
+    const r = await fetch("/api/unmatched"); const d = await r.json();
+    list.innerHTML = (d.unmatched&&d.unmatched.length)
+      ? d.unmatched.map(n=>`<span>${n}</span>`).join("")
+      : "<span style='background:none;border:none;color:var(--sage)'>Nothing unmatched — every scorer mapped cleanly.</span>";
+  }catch{
+    list.innerHTML = "<span style='background:none;border:none;color:var(--sage)'>Feed not live yet (deploy the functions first).</span>";
+  }
+};
+
+// --- live feed: reads /api/stats from the Netlify function (server polls API-Football) ---
+async function loadStats(){
+  try{
+    const r = await fetch("/api/stats"); if(!r.ok) throw 0;
+    const d = await r.json();
+    apiStats = d.players || {};
+    document.getElementById("liveBadge").classList.add("on");
+    document.getElementById("liveText").textContent = d.updated
+      ? "Live · updated "+new Date(d.updated).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})
+      : "Live feed connected";
+    render();
+  }catch{ /* no server yet (e.g. opened locally): stay in manual mode */ }
+}
+
+render();
+loadStats();
+setInterval(loadStats, 90000); // refresh the board every 90s
+</script>
+</body>
+</html>
