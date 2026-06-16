@@ -25,22 +25,30 @@ export const PICKED = [
 // Key = normalized string the API might send -> value = our canonical display name.
 // Extend this whenever the unmatched log (see poll-stats) flags a scorer that didn't map.
 export const ALIASES = {
-  "son":"Heung-min Son", "sonheungmin":"Heung-min Son", "heungminson":"Heung-min Son",
-  "viniciusjose":"Vinicius Junior", "vinicius":"Vinicius Junior", "vinijunior":"Vinicius Junior",
-  "viniciusjuniordeoliveira":"Vinicius Junior",
-  "rodrigohernandez":"Rodri", "rodrihernandez":"Rodri",
-  "gabrieldosmagalhaes":"Gabriel", "gabrielmagalhaes":"Gabriel",
-  "rafaelleao":"Rafael Leão", "leao":"Rafael Leão",
-  "bernardomotacarvalho":"Bernardo Silva",
-  "endrickfelipe":"Endrick", "rodrygo":"Rayan", // do NOT confuse; left as example
-  "rayanaitnouri":"Rayan", "rayancherki":"Rayan Cherki",
-  "amadtraore":"Amad Diallo", "amad":"Amad Diallo",
-  "joaopedro":"João Neves", // example only — verify before trusting
-  "memphis":"Memphis Depay", "depay":"Memphis Depay",
-  "kdb":"Kevin De Bruyne", "debruyne":"Kevin De Bruyne",
-  "fabinhotavares":"Fabinho",
-  "lamineyamal":"Lamine Yamal", "yamal":"Lamine Yamal",
-  "robertoalvarado":"Roberto Alvarado", "piojoalvarado":"Roberto Alvarado",
+  // Reordered / nickname / accented forms football-data.org may send.
+  "son":"Heung-min Son","sonheungmin":"Heung-min Son","heungminson":"Heung-min Son","hson":"Heung-min Son",
+  "vinicius":"Vinicius Junior","vinijr":"Vinicius Junior","vinijunior":"Vinicius Junior","viniciusjr":"Vinicius Junior",
+  "viniciusjunior":"Vinicius Junior","viniciusjose":"Vinicius Junior","viniciusjosepaixaodeoliveirajunior":"Vinicius Junior",
+  "rodri":"Rodri","rodrihernandez":"Rodri","rodrigohernandez":"Rodri",
+  "gabriel":"Gabriel","gabrielmagalhaes":"Gabriel","gabrieldosmagalhaes":"Gabriel",
+  "rafaelleao":"Rafael Leão","rafaleao":"Rafael Leão","leao":"Rafael Leão",
+  "bernardosilva":"Bernardo Silva","bernardo":"Bernardo Silva","bernardomotacarvalho":"Bernardo Silva",
+  "brunofernandes":"Bruno Fernandes","endrick":"Endrick",
+  "rayancherki":"Rayan Cherki","memphis":"Memphis Depay","memphisdepay":"Memphis Depay","depay":"Memphis Depay",
+  "kdb":"Kevin De Bruyne","debruyne":"Kevin De Bruyne","kevindebruyne":"Kevin De Bruyne",
+  "lamineyamal":"Lamine Yamal","yamal":"Lamine Yamal","kylianmbappe":"Kylian Mbappé","mbappe":"Kylian Mbappé",
+  "ousmanedembele":"Ousmane Dembélé","dembele":"Ousmane Dembélé","michaelolise":"Michael Olise","olise":"Michael Olise",
+  "robertoalvarado":"Roberto Alvarado","alvarado":"Roberto Alvarado","piojoalvarado":"Roberto Alvarado",
+  "jamesrodriguez":"James Rodríguez","james":"James Rodríguez",
+  "mohamedsalah":"Mohamed Salah","salah":"Mohamed Salah","mohamedamoura":"Mohamed Amoura","amoura":"Mohamed Amoura",
+  "hakancalhanoglu":"Hakan Çalhanoğlu","calhanoglu":"Hakan Çalhanoğlu","ardaguler":"Arda Güler","guler":"Arda Güler",
+  "viktorgyokeres":"Viktor Gyökeres","gyokeres":"Viktor Gyökeres","martinodegaard":"Martin Ødegaard","odegaard":"Martin Ødegaard",
+  "takefusakubo":"Takefusa Kubo","kubo":"Takefusa Kubo","ritsudoan":"Ritsu Doan",
+  "lautaromartinez":"Lautaro Martínez","lautaro":"Lautaro Martínez","julianalvarez":"Julián Álvarez",
+  "lionelmessi":"Lionel Messi","messi":"Lionel Messi","cristianoronaldo":"Cristiano Ronaldo","ronaldo":"Cristiano Ronaldo",
+  "lukamodric":"Luka Modrić","modric":"Luka Modrić","achrafhakimi":"Achraf Hakimi","hakimi":"Achraf Hakimi",
+  "antonionusa":"Antonio Nusa","nusa":"Antonio Nusa","ismailasarr":"Ismaïla Sarr","sadiomane":"Sadio Mané",
+  "edindzeko":"Edin Džeko","vladimircoufal":"Vladimír Coufal","coufal":"Vladimír Coufal","jeremydoku":"Jérémy Doku",
 };
 
 // Strip accents, punctuation, spaces -> lowercase ascii. "Hakan Çalhanoğlu" -> "hakancalhanoglu"
