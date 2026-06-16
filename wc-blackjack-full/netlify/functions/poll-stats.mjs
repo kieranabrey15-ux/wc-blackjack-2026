@@ -20,6 +20,7 @@ const LEAGUE = 1;
 const SEASON = 2026;
 const MAX_DAILY_REQUESTS = 90;        // stay under the free 100/day
 const MAX_EVENT_FETCHES_PER_RUN = 8;  // protect the 10s timeout
+const BACKFILL_FETCHES_PER_RUN = 20;  // bigger one-time catch-up batch (still timeout-safe)
 
 const LIVE = new Set(["1H", "HT", "2H", "ET", "BT", "P", "LIVE"]);
 const DONE = new Set(["FT", "AET", "PEN"]);
@@ -53,48 +54,58 @@ function tallyFixture(events) {
   return { out, unmatched: [...unmatched] };
 }
 
-export default async () => {
+export default async (req) => {
   if (!process.env.API_FOOTBALL_KEY) {
     return new Response("Missing API_FOOTBALL_KEY", { status: 500 });
   }
   const store = getStore("wc-blackjack");
+  const backfill = new URL(req.url).searchParams.get("backfill") === "1";
 
   // --- daily budget guard ---
   const today = new Date().toISOString().slice(0, 10);
   const budget = (await store.get("budget", { type: "json" })) || { day: today, used: 0 };
   if (budget.day !== today) { budget.day = today; budget.used = 0; }
   if (budget.used >= MAX_DAILY_REQUESTS) {
-    return new Response("Daily request budget reached; skipping.", { status: 200 });
+    return new Response("Daily request budget reached; try again tomorrow (free tier = 100/day).", { status: 200 });
   }
 
   const fixtureStats = (await store.get("fixtureStats", { type: "json" })) || {}; // {fid: {name:{g,a}}}
   const finalized = new Set((await store.get("finalized", { type: "json" })) || []);
   const unmatchedLog = new Set((await store.get("unmatched", { type: "json" })) || []);
 
-  // --- 1 request: what's live right now ---
   let calls = 0;
-  const live = await api(`/fixtures?league=${LEAGUE}&season=${SEASON}&live=all`); calls++;
+  let toProcess = [];
 
-  // Also catch matches that finished since last run (yesterday/today across host time zones).
-  const dates = [today, new Date(Date.now() - 864e5).toISOString().slice(0, 10)];
-  let finishedCandidates = [];
-  for (const d of dates) {
-    if (budget.used + calls >= MAX_DAILY_REQUESTS) break;
-    const day = await api(`/fixtures?league=${LEAGUE}&season=${SEASON}&date=${d}`); calls++;
-    finishedCandidates.push(...day.filter(f => DONE.has(f.fixture.status.short) && !finalized.has(f.fixture.id)));
+  if (backfill) {
+    // One-time catch-up: every finished fixture in the tournament not yet processed.
+    // Bigger per-run cap (still timeout-safe) so the backlog clears in a few hits.
+    const all = await api(`/fixtures?league=${LEAGUE}&season=${SEASON}`); calls++;
+    toProcess = all
+      .filter(f => DONE.has(f.fixture.status.short) && !finalized.has(f.fixture.id))
+      .slice(0, BACKFILL_FETCHES_PER_RUN);
+  } else {
+    // Normal incremental mode: live now + finished since last run.
+    const live = await api(`/fixtures?league=${LEAGUE}&season=${SEASON}&live=all`); calls++;
+    const dates = [today, new Date(Date.now() - 864e5).toISOString().slice(0, 10)];
+    let finishedCandidates = [];
+    for (const d of dates) {
+      if (budget.used + calls >= MAX_DAILY_REQUESTS) break;
+      const day = await api(`/fixtures?league=${LEAGUE}&season=${SEASON}&date=${d}`); calls++;
+      finishedCandidates.push(...day.filter(f => DONE.has(f.fixture.status.short) && !finalized.has(f.fixture.id)));
+    }
+    const liveFixtures = live.filter(f => LIVE.has(f.fixture.status.short));
+    toProcess = [...liveFixtures, ...finishedCandidates].slice(0, MAX_EVENT_FETCHES_PER_RUN);
   }
-
-  const liveFixtures = live.filter(f => LIVE.has(f.fixture.status.short));
-  // Process live (always re-tally) first, then newly finished, capped for the timeout.
-  const toProcess = [...liveFixtures, ...finishedCandidates].slice(0, MAX_EVENT_FETCHES_PER_RUN);
 
   if (toProcess.length === 0) {
     budget.used += calls; await store.setJSON("budget", budget);
-    return new Response("Nothing live or newly finished.", { status: 200 });
+    return new Response(backfill ? "Backfill complete — no more finished fixtures to process."
+                                 : "Nothing live or newly finished.", { status: 200 });
   }
 
+  let remaining = 0;
   for (const f of toProcess) {
-    if (budget.used + calls >= MAX_DAILY_REQUESTS) break;
+    if (budget.used + calls >= MAX_DAILY_REQUESTS) { remaining = 1; break; }
     const fid = f.fixture.id;
     const events = await api(`/fixtures/events?fixture=${fid}`); calls++;
     const { out, unmatched } = tallyFixture(events);
@@ -121,7 +132,11 @@ export default async () => {
     store.setJSON("budget", budget),
   ]);
 
-  return new Response(JSON.stringify({ processed: toProcess.length, calls, dailyUsed: budget.used,
+  const note = backfill
+    ? `Backfilled ${toProcess.length} fixture(s). ${(remaining||budget.used>=MAX_DAILY_REQUESTS) ? "Budget reached or more remain — run ?backfill=1 again to continue." : "If older games are still missing, run ?backfill=1 once more."}`
+    : `processed ${toProcess.length}`;
+  return new Response(JSON.stringify({ mode: backfill ? "backfill" : "incremental",
+    processed: toProcess.length, calls, dailyUsed: budget.used, note,
     unmatched: [...unmatchedLog] }), { headers: { "content-type": "application/json" } });
 };
 
